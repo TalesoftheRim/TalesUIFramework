@@ -1,0 +1,5 @@
+I:\Developments\RimWorld Mod Development\Commissions\WIP\Tales of the Rim Mods\MultiProject\Tales UI Framework\1.6\Assemblies\TalesUIFramework.dll
+I:\Developments\RimWorld Mod Development\Commissions\WIP\Tales of the Rim Mods\MultiProject\Tales UI Framework\1.6\Source\obj\Release\TalesUIFramework.csproj.AssemblyReference.cache
+I:\Developments\RimWorld Mod Development\Commissions\WIP\Tales of the Rim Mods\MultiProject\Tales UI Framework\1.6\Source\obj\Release\TalesUIFramework.GeneratedMSBuildEditorConfig.editorconfig
+I:\Developments\RimWorld Mod Development\Commissions\WIP\Tales of the Rim Mods\MultiProject\Tales UI Framework\1.6\Source\obj\Release\TalesUIFramework.csproj.CoreCompileInputs.cache
+I:\Developments\RimWorld Mod Development\Commissions\WIP\Tales of the Rim Mods\MultiProject\Tales UI Framework\1.6\Source\obj\Release\TalesUIFramework.dll

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+
+	<TalesUIFramework.SettingsCategory>Tales UI Framework</TalesUIFramework.SettingsCategory>
+
+	<TalesUIFramework.Settings.ShowUI>Show Tales UI controls</TalesUIFramework.Settings.ShowUI>
+	<TalesUIFramework.Settings.ShowUIDesc>Master toggle for displaying Tales UI Framework pawn controls (also synced with the bottom-right PlaySettings icon).</TalesUIFramework.Settings.ShowUIDesc>
+
+	<TalesUIFramework.Settings.UseCompactPanel>Use compact 2-column panel</TalesUIFramework.Settings.UseCompactPanel>
+	<TalesUIFramework.Settings.UseCompactPanelDesc>When enabled, displays a compact 2-column control gizmo (Left: Toggles, Right: Stance/Direction selectors). Disable to fall back to individual vanilla RimWorld gizmos.</TalesUIFramework.Settings.UseCompactPanelDesc>
+
+	<TalesUIFramework.Settings.RegisteredProvidersHeader>Active Registered Control Modules:</TalesUIFramework.Settings.RegisteredProvidersHeader>
+	<TalesUIFramework.Settings.NoProvidersRegistered>No compatible control modules currently registered.</TalesUIFramework.Settings.NoProvidersRegistered>
+
+	<TalesUIFramework.PlaySettingsToggle>Toggle visibility of Tales UI Framework pawn control panel.</TalesUIFramework.PlaySettingsToggle>
+
+	<TalesUIFramework.UI.PanelLabel>Tales UI</TalesUIFramework.UI.PanelLabel>
+	<TalesUIFramework.UI.ToggleHeader>Toggle {0}</TalesUIFramework.UI.ToggleHeader>
+	<TalesUIFramework.UI.StateOn>ON</TalesUIFramework.UI.StateOn>
+	<TalesUIFramework.UI.StateOff>OFF</TalesUIFramework.UI.StateOff>
+	<TalesUIFramework.UI.CurrentValue>Current: {0}</TalesUIFramework.UI.CurrentValue>
+	<TalesUIFramework.UI.ClickHint>Left-click: Cycle | Right-click: Menu</TalesUIFramework.UI.ClickHint>
+	<TalesUIFramework.UI.DisabledHint>Disabled: Turn on the toggle on the left to enable.</TalesUIFramework.UI.DisabledHint>
+	<TalesUIFramework.UI.CurrentOptionMarker>{0} (current)</TalesUIFramework.UI.CurrentOptionMarker>
+
+</LanguageData>

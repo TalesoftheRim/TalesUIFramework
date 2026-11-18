@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "tLOFE7N6vIQ=",
+  "success": true,
+  "projectFilePath": "I:\\Developments\\RimWorld Mod Development\\Commissions\\WIP\\Tales of the Rim Mods\\MultiProject\\Tales UI Framework\\1.6\\Source\\TalesUIFramework.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\andri\\.gemini\\antigravity\\brain\\71ad7e1e-6c0f-4813-96b9-411656316d81\\scratch\\.dotnet\\.nuget\\packages\\krafs.rimworld.ref\\1.6.4850\\krafs.rimworld.ref.1.6.4850.nupkg.sha512",
+    "C:\\Users\\andri\\.gemini\\antigravity\\brain\\71ad7e1e-6c0f-4813-96b9-411656316d81\\scratch\\.dotnet\\.nuget\\packages\\lib.harmony\\2.4.3\\lib.harmony.2.4.3.nupkg.sha512"
+  ],
+  "logs": []
+}

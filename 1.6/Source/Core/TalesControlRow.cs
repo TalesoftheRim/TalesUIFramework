@@ -11,14 +11,14 @@ namespace TalesUIFramework
         public float Order { get; }
         public string Title { get; }
 
-        // Left column (Toggle)
+        // Top slot (Toggle)
         public Texture2D ToggleIcon { get; }
         public string ToggleTooltip { get; }
         public Func<bool> IsEnabled { get; }
         public Action<bool> SetEnabled { get; }
         public string FallbackToggleLabel { get; }
 
-        // Right column (Direction / Stance selection)
+        // Bottom slot (Direction / Stance selection)
         public IReadOnlyList<TalesControlOption> Options { get; }
         public Func<string> GetSelectedOptionId { get; }
         public Action<string> SelectOption { get; }

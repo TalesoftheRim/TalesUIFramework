@@ -23,39 +23,33 @@ namespace TalesUIFramework
 
         public static IEnumerable<Gizmo> Pawn_GetGizmos_Postfix(IEnumerable<Gizmo> __result, Pawn __instance)
         {
+            if (__instance != null
+                && !__instance.Destroyed
+                && TalesUISettings.ShowUI
+                && (__instance.Faction is { IsPlayer: true } || DebugSettings.godMode))
+            {
+                List<TalesControlRow> rows = TalesUIRegistry.CollectControlsForPawn(__instance);
+                if (rows.Count > 0)
+                {
+                    if (TalesUISettings.UseCompactPanel)
+                    {
+                        yield return new Gizmo_TalesControlPanel(__instance, rows);
+                    }
+                    else
+                    {
+                        foreach (Gizmo fallbackGizmo in TalesFallbackGizmos.BuildVanillaGizmos(rows))
+                        {
+                            yield return fallbackGizmo;
+                        }
+                    }
+                }
+            }
+
             if (__result != null)
             {
                 foreach (Gizmo gizmo in __result)
                 {
                     yield return gizmo;
-                }
-            }
-
-            if (__instance == null || __instance.Destroyed || !TalesUISettings.ShowUI)
-            {
-                yield break;
-            }
-
-            if (__instance.Faction is not { IsPlayer: true } && !DebugSettings.godMode)
-            {
-                yield break;
-            }
-
-            List<TalesControlRow> rows = TalesUIRegistry.CollectControlsForPawn(__instance);
-            if (rows.Count == 0)
-            {
-                yield break;
-            }
-
-            if (TalesUISettings.UseCompactPanel)
-            {
-                yield return new Gizmo_TalesControlPanel(__instance, rows);
-            }
-            else
-            {
-                foreach (Gizmo fallbackGizmo in TalesFallbackGizmos.BuildVanillaGizmos(rows))
-                {
-                    yield return fallbackGizmo;
                 }
             }
         }

@@ -11,12 +11,18 @@ namespace TalesUIFramework
     public class Gizmo_TalesControlPanel : Command
     {
         public const float MinGizmoSize = 75f;
-        public const float ContentPadding = 4f;
-        public const float IconSize = 32f;
-        public const float ColumnGap = 3f;
-        public const float RowGap = 3f;
-        public const float PanelWidth = ContentPadding * 2f + IconSize * 2f + ColumnGap; // 75f
-        public const float StatusBadgeSize = 12f;
+        public const float MaxPanelHeight = InspectPaneUtility.PaneHeight - 25f; // 140f: stays below Left Info Panel height (165f)
+        public const float ContentPadding = 6f;
+        public const float GroupPadding = 2f;
+        public const float ButtonSize = 60f;
+        public const float ColumnGap = 8f;
+        public const float RowGap = 4f;
+        public const float StatusBadgeSize = 18f;
+
+        private static readonly Color GroupBaseBg = new(0.06f, 0.06f, 0.08f, 0.65f);
+        private static readonly Color GroupBaseBorder = new(0.25f, 0.26f, 0.29f, 0.80f);
+        private static readonly Color GroupActiveBorder = new(0.32f, 0.54f, 0.35f, 0.90f);
+        private static readonly Color GroupMixedBorder = new(0.58f, 0.50f, 0.24f, 0.90f);
 
         private static readonly Color SlotBaseBg = new(0.11f, 0.11f, 0.13f, 0.92f);
         private static readonly Color SlotMouseOverBg = new(0.24f, 0.23f, 0.17f, 0.96f);
@@ -24,6 +30,7 @@ namespace TalesUIFramework
 
         private static readonly Color SlotBaseBorder = new(0.36f, 0.36f, 0.40f, 0.95f);
         private static readonly Color SlotActiveBorder = new(0.38f, 0.65f, 0.40f, 0.95f);
+        private static readonly Color SlotMixedBorder = new(0.75f, 0.64f, 0.28f, 0.95f);
         private static readonly Color SlotMouseOverBorder = new(0.82f, 0.78f, 0.48f, 1.0f);
         private static readonly Color SlotDisabledBorder = new(0.22f, 0.22f, 0.24f, 0.70f);
 
@@ -32,7 +39,7 @@ namespace TalesUIFramework
         private static readonly Color DisabledBadgeTextColor = new(0.55f, 0.55f, 0.55f, 0.55f);
         private static readonly Color ShadowColor = new(0f, 0f, 0f, 0.85f);
 
-        private enum InteractionColumn
+        private enum InteractionRow
         {
             None,
             Toggle,
@@ -40,10 +47,14 @@ namespace TalesUIFramework
         }
 
         private readonly Pawn _pawn;
-        private readonly List<TalesControlRow> _rows;
+        private readonly List<TalesControlRow> _ownRows;
+        private readonly Dictionary<string, TalesControlRow> _ownRowsById = new();
+        private readonly List<TalesControlRow> _displayColumns = new();
+        private readonly Dictionary<string, TalesControlRow> _displayColumnsById = new();
+        private readonly List<Gizmo_TalesControlPanel> _mergedPanels = new();
 
-        private string _pendingRowId;
-        private InteractionColumn _pendingColumn = InteractionColumn.None;
+        private string _pendingColumnId;
+        private InteractionRow _pendingRow = InteractionRow.None;
         private int _pendingMouseButton = -1;
         private Event _pendingEvent;
 
@@ -52,16 +63,28 @@ namespace TalesUIFramework
         public Gizmo_TalesControlPanel(Pawn pawn, List<TalesControlRow> rows)
         {
             _pawn = pawn;
-            _rows = rows ?? new List<TalesControlRow>();
+            _ownRows = rows ?? new List<TalesControlRow>();
+            _mergedPanels.Add(this);
 
             StringBuilder sig = new();
-            for (int i = 0; i < _rows.Count; i++)
+            for (int i = 0; i < _ownRows.Count; i++)
             {
+                TalesControlRow row = _ownRows[i];
                 if (i > 0)
                 {
                     sig.Append('|');
                 }
-                sig.Append(_rows[i].Id);
+                sig.Append(row.Id);
+
+                if (!_ownRowsById.ContainsKey(row.Id))
+                {
+                    _ownRowsById[row.Id] = row;
+                }
+                if (!_displayColumnsById.ContainsKey(row.Id))
+                {
+                    _displayColumns.Add(row);
+                    _displayColumnsById[row.Id] = row;
+                }
             }
             RowSignature = sig.ToString();
 
@@ -70,17 +93,68 @@ namespace TalesUIFramework
             shrinkable = false;
             groupable = true;
             activateSound = null;
-            Order = 0f;
+            Order = -10000f;
         }
 
         public override float GetWidth(float maxWidth)
         {
-            return Mathf.Min(PanelWidth, maxWidth);
+            return Mathf.Min(CalculatePreferredWidth(), maxWidth);
+        }
+
+        private float CalculatePreferredWidth()
+        {
+            if (_displayColumns.Count == 0)
+            {
+                return MinGizmoSize;
+            }
+
+            float columnsWidth = _displayColumns.Count * ButtonSize + (_displayColumns.Count - 1) * ColumnGap;
+            return Mathf.Max(MinGizmoSize, (ContentPadding + GroupPadding) * 2f + columnsWidth);
         }
 
         public override bool GroupsWith(Gizmo other)
         {
-            return other is Gizmo_TalesControlPanel otherPanel && otherPanel.RowSignature == RowSignature;
+            return other is Gizmo_TalesControlPanel;
+        }
+
+        public override void MergeWith(Gizmo other)
+        {
+            if (other is not Gizmo_TalesControlPanel otherPanel || ReferenceEquals(otherPanel, this))
+            {
+                return;
+            }
+
+            for (int i = 0; i < _mergedPanels.Count; i++)
+            {
+                if (ReferenceEquals(_mergedPanels[i], otherPanel)
+                    || (_pawn != null && otherPanel._pawn != null && _pawn == otherPanel._pawn))
+                {
+                    return;
+                }
+            }
+
+            _mergedPanels.Add(otherPanel);
+
+            bool addedColumn = false;
+            for (int i = 0; i < otherPanel._ownRows.Count; i++)
+            {
+                TalesControlRow candidate = otherPanel._ownRows[i];
+                if (!_displayColumnsById.ContainsKey(candidate.Id))
+                {
+                    _displayColumns.Add(candidate);
+                    _displayColumnsById[candidate.Id] = candidate;
+                    addedColumn = true;
+                }
+            }
+
+            if (addedColumn && _displayColumns.Count > 1)
+            {
+                _displayColumns.Sort((a, b) =>
+                {
+                    int cmp = a.Order.CompareTo(b.Order);
+                    return cmp != 0 ? cmp : string.CompareOrdinal(a.Id, b.Id);
+                });
+            }
         }
 
         public override bool InheritInteractionsFrom(Gizmo other)
@@ -90,98 +164,214 @@ namespace TalesUIFramework
 
         public override GizmoResult GizmoOnGUI(Vector2 topLeft, float maxWidth, GizmoRenderParms parms)
         {
-            _pendingRowId = null;
-            _pendingColumn = InteractionColumn.None;
+            _pendingColumnId = null;
+            _pendingRow = InteractionRow.None;
             _pendingMouseButton = -1;
             _pendingEvent = null;
 
-            if (_rows.Count == 0)
+            if (_displayColumns.Count == 0)
             {
                 return new GizmoResult(GizmoState.Clear);
             }
 
             float width = GetWidth(maxWidth);
-            float contentHeight = _rows.Count * IconSize + (_rows.Count - 1) * RowGap;
-            float totalHeight = Mathf.Max(MinGizmoSize, ContentPadding * 2f + contentHeight);
+            int columnCount = _displayColumns.Count;
+            float chromeWidth = (ContentPadding + GroupPadding) * 2f;
+            float horizontalGaps = Mathf.Max(0, columnCount - 1) * ColumnGap;
+            float maxSlotByWidth = Mathf.Max(24f, (width - chromeWidth - horizontalGaps) / columnCount);
+            float maxSlotByHeight = (MaxPanelHeight - (ContentPadding + GroupPadding) * 2f - RowGap) * 0.5f;
+            float slotSize = Mathf.Min(ButtonSize, Mathf.Min(maxSlotByWidth, maxSlotByHeight));
 
-            // Keep bottom edge aligned with the standard 75f gizmo row; expand upward for 3-4 rows.
+            float contentWidth = columnCount * slotSize + horizontalGaps;
+            float groupInnerHeight = slotSize * 2f + RowGap;
+            float groupTotalHeight = groupInnerHeight + GroupPadding * 2f;
+            float totalHeight = Mathf.Clamp(ContentPadding * 2f + groupTotalHeight, MinGizmoSize, MaxPanelHeight);
+
+            // Keep bottom edge aligned with the standard 75f gizmo row; expand upward bounded below Left Info Panel height.
             float bottomY = topLeft.y + MinGizmoSize;
             Rect gizmoRect = new(topLeft.x, bottomY - totalHeight, width, totalHeight);
 
             Widgets.DrawWindowBackground(gizmoRect);
 
-            float startX = gizmoRect.x + (gizmoRect.width - (IconSize * 2f + ColumnGap)) * 0.5f;
-            float startY = gizmoRect.y + (gizmoRect.height - contentHeight) * 0.5f;
+            float startX = gizmoRect.x + (gizmoRect.width - contentWidth) * 0.5f;
+            float topToggleY = gizmoRect.y + (gizmoRect.height - groupInnerHeight) * 0.5f;
+            float bottomOptionY = topToggleY + slotSize + RowGap;
 
-            for (int i = 0; i < _rows.Count; i++)
+            int totalPanelCount = _mergedPanels.Count;
+
+            for (int i = 0; i < columnCount; i++)
             {
-                TalesControlRow row = _rows[i];
-                float rowY = startY + i * (IconSize + RowGap);
+                TalesControlRow displayRow = _displayColumns[i];
+                float columnX = startX + i * (slotSize + ColumnGap);
 
-                Rect toggleRect = new(startX, rowY, IconSize, IconSize);
-                Rect selectionRect = new(startX + IconSize + ColumnGap, rowY, IconSize, IconSize);
+                CollectColumnAggregate(
+                    displayRow.Id,
+                    out int matchingCount,
+                    out int enabledCount,
+                    out TalesControlRow firstEnabledRow,
+                    out TalesControlRow firstMatchingRow,
+                    out bool hasMixedOptions);
 
-                bool isEnabled = row.IsEnabled();
-                TalesControlOption currentOption = row.GetCurrentOption();
+                bool anyEnabled = enabledCount > 0;
+                bool allEnabled = matchingCount > 0 && enabledCount == matchingCount;
+                bool isMixedToggle = anyEnabled && !allEnabled;
 
-                DrawToggleCell(toggleRect, row, isEnabled);
-                DrawSelectionCell(selectionRect, row, isEnabled, currentOption);
+                TalesControlRow representativeRow = firstEnabledRow ?? firstMatchingRow ?? displayRow;
+                TalesControlOption currentOption = representativeRow.GetCurrentOption();
+
+                Rect groupRect = new(
+                    columnX - GroupPadding,
+                    topToggleY - GroupPadding,
+                    slotSize + GroupPadding * 2f,
+                    groupTotalHeight);
+                Color groupBorder = allEnabled
+                    ? GroupActiveBorder
+                    : (isMixedToggle ? GroupMixedBorder : GroupBaseBorder);
+                Widgets.DrawBoxSolidWithOutline(groupRect, GroupBaseBg, groupBorder, 1);
+
+                Rect toggleRect = new(columnX, topToggleY, slotSize, slotSize);
+                Rect selectionRect = new(columnX, bottomOptionY, slotSize, slotSize);
+
+                DrawToggleCell(
+                    toggleRect,
+                    representativeRow,
+                    anyEnabled,
+                    allEnabled,
+                    isMixedToggle,
+                    matchingCount,
+                    totalPanelCount,
+                    enabledCount);
+
+                DrawSelectionCell(
+                    selectionRect,
+                    representativeRow,
+                    anyEnabled,
+                    hasMixedOptions,
+                    currentOption,
+                    matchingCount,
+                    totalPanelCount);
             }
 
             GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
             Text.Font = GameFont.Small;
 
-            return _pendingColumn != InteractionColumn.None
+            return _pendingRow != InteractionRow.None
                 ? new GizmoResult(GizmoState.Interacted, _pendingEvent ?? Event.current)
                 : new GizmoResult(GizmoState.Clear);
         }
 
-        private void DrawToggleCell(Rect cellRect, TalesControlRow row, bool isEnabled)
+        private void CollectColumnAggregate(
+            string rowId,
+            out int matchingCount,
+            out int enabledCount,
+            out TalesControlRow firstEnabledRow,
+            out TalesControlRow firstMatchingRow,
+            out bool hasMixedOptions)
+        {
+            matchingCount = 0;
+            enabledCount = 0;
+            firstEnabledRow = null;
+            firstMatchingRow = null;
+            hasMixedOptions = false;
+
+            string firstSelectedOptionId = null;
+
+            for (int i = 0; i < _mergedPanels.Count; i++)
+            {
+                TalesControlRow ownRow = _mergedPanels[i].FindOwnRow(rowId);
+                if (ownRow == null)
+                {
+                    continue;
+                }
+
+                matchingCount++;
+                firstMatchingRow ??= ownRow;
+
+                if (!ownRow.IsEnabled())
+                {
+                    continue;
+                }
+
+                enabledCount++;
+                firstEnabledRow ??= ownRow;
+
+                string optionId = ownRow.GetSelectedOptionId() ?? string.Empty;
+                if (firstSelectedOptionId == null)
+                {
+                    firstSelectedOptionId = optionId;
+                }
+                else if (firstSelectedOptionId != optionId)
+                {
+                    hasMixedOptions = true;
+                }
+            }
+        }
+
+        private void DrawToggleCell(
+            Rect cellRect,
+            TalesControlRow row,
+            bool anyEnabled,
+            bool allEnabled,
+            bool isMixedToggle,
+            int matchingCount,
+            int totalPanelCount,
+            int enabledCount)
         {
             bool hovered = Mouse.IsOver(cellRect);
             Color bg = hovered ? SlotMouseOverBg : SlotBaseBg;
             Color border = hovered
                 ? SlotMouseOverBorder
-                : (isEnabled ? SlotActiveBorder : SlotBaseBorder);
+                : (allEnabled ? SlotActiveBorder : (isMixedToggle ? SlotMixedBorder : SlotBaseBorder));
 
             Widgets.DrawBoxSolidWithOutline(cellRect, bg, border, 1);
 
-            Rect iconRect = cellRect.ContractedBy(3f);
-            GUI.color = isEnabled ? Color.white : OffToggleIconColor;
+            Rect iconRect = cellRect.ContractedBy(5f);
+            GUI.color = anyEnabled ? Color.white : OffToggleIconColor;
             Widgets.DrawTextureFitted(iconRect, row.ToggleIcon ?? BaseContent.BadTex, 1f);
 
             Rect badgeRect = new(
-                cellRect.xMax - StatusBadgeSize - 1f,
-                cellRect.y + 1f,
+                cellRect.xMax - StatusBadgeSize - 2f,
+                cellRect.y + 2f,
                 StatusBadgeSize,
                 StatusBadgeSize);
             GUI.color = Color.white;
-            Texture2D badgeTex = isEnabled ? Widgets.CheckboxOnTex : Widgets.CheckboxOffTex;
+            Texture2D badgeTex = allEnabled
+                ? Widgets.CheckboxOnTex
+                : (isMixedToggle ? (Widgets.CheckboxPartialTex ?? Widgets.CheckboxOnTex) : Widgets.CheckboxOffTex);
             if (badgeTex != null)
             {
                 GUI.DrawTexture(badgeRect, badgeTex);
             }
 
-            TooltipHandler.TipRegion(cellRect, row.BuildToggleTooltip());
+            TooltipHandler.TipRegion(
+                cellRect,
+                BuildGroupToggleTooltip(row, anyEnabled, allEnabled, matchingCount, totalPanelCount, enabledCount));
             MouseoverSounds.DoRegion(cellRect, SoundDefOf.Mouseover_Command);
 
             if (Widgets.ButtonInvisible(cellRect, doMouseoverSound: true) && Event.current.button == 0)
             {
-                _pendingRowId = row.Id;
-                _pendingColumn = InteractionColumn.Toggle;
+                _pendingColumnId = row.Id;
+                _pendingRow = InteractionRow.Toggle;
                 _pendingMouseButton = Event.current.button;
                 _pendingEvent = Event.current;
             }
         }
 
-        private void DrawSelectionCell(Rect cellRect, TalesControlRow row, bool isEnabled, TalesControlOption currentOption)
+        private void DrawSelectionCell(
+            Rect cellRect,
+            TalesControlRow row,
+            bool anyEnabled,
+            bool hasMixedOptions,
+            TalesControlOption currentOption,
+            int matchingCount,
+            int totalPanelCount)
         {
-            bool hovered = isEnabled && Mouse.IsOver(cellRect);
+            bool hovered = anyEnabled && Mouse.IsOver(cellRect);
 
             Color bg;
             Color border;
-            if (!isEnabled)
+            if (!anyEnabled)
             {
                 bg = SlotDisabledBg;
                 border = SlotDisabledBorder;
@@ -200,28 +390,33 @@ namespace TalesUIFramework
             Widgets.DrawBoxSolidWithOutline(cellRect, bg, border, 1);
 
             Texture2D optionIcon = currentOption?.Icon ?? row.ToggleIcon ?? BaseContent.BadTex;
-            bool hasShortBadge = !string.IsNullOrEmpty(currentOption?.ShortBadge);
-            Rect iconRect = cellRect.ContractedBy(3f);
+            string badgeText = hasMixedOptions && !string.IsNullOrEmpty(currentOption?.ShortBadge)
+                ? "~"
+                : currentOption?.ShortBadge;
+            bool hasShortBadge = !string.IsNullOrEmpty(badgeText);
+            Rect iconRect = cellRect.ContractedBy(5f);
 
             if (hasShortBadge)
             {
-                GUI.color = isEnabled
+                GUI.color = anyEnabled
                     ? new Color(1f, 1f, 1f, 0.42f)
                     : new Color(0.42f, 0.42f, 0.42f, 0.22f);
                 Widgets.DrawTextureFitted(iconRect, optionIcon, 1f);
 
-                DrawShortBadge(cellRect, currentOption.ShortBadge, isEnabled);
+                DrawShortBadge(cellRect, badgeText, anyEnabled);
             }
             else
             {
-                GUI.color = isEnabled ? Color.white : DisabledIconColor;
+                GUI.color = anyEnabled ? Color.white : DisabledIconColor;
                 Widgets.DrawTextureFitted(iconRect, optionIcon, 1f);
             }
 
             GUI.color = Color.white;
-            TooltipHandler.TipRegion(cellRect, row.BuildSelectionTooltip(isEnabled, currentOption));
+            TooltipHandler.TipRegion(
+                cellRect,
+                BuildGroupSelectionTooltip(row, anyEnabled, hasMixedOptions, currentOption, matchingCount, totalPanelCount));
 
-            if (!isEnabled)
+            if (!anyEnabled)
             {
                 return;
             }
@@ -233,12 +428,74 @@ namespace TalesUIFramework
                 int button = Event.current.button;
                 if (button == 0 || button == 1)
                 {
-                    _pendingRowId = row.Id;
-                    _pendingColumn = InteractionColumn.Selection;
+                    _pendingColumnId = row.Id;
+                    _pendingRow = InteractionRow.Selection;
                     _pendingMouseButton = button;
                     _pendingEvent = Event.current;
                 }
             }
+        }
+
+        private static string BuildGroupToggleTooltip(
+            TalesControlRow row,
+            bool anyEnabled,
+            bool allEnabled,
+            int matchingCount,
+            int totalPanelCount,
+            int enabledCount)
+        {
+            if (totalPanelCount <= 1 && matchingCount <= 1)
+            {
+                return row.BuildToggleTooltip();
+            }
+
+            string header = "TalesUIFramework.UI.ToggleHeader".Translate(row.Title).ToString();
+            string stateText = allEnabled
+                ? "TalesUIFramework.UI.StateOn".Translate().ToString()
+                : (anyEnabled
+                    ? "TalesUIFramework.UI.StateMixed".Translate(enabledCount, matchingCount).ToString()
+                    : "TalesUIFramework.UI.StateOff".Translate().ToString());
+            string currentLine = "TalesUIFramework.UI.CurrentValue".Translate(stateText).ToString();
+
+            if (matchingCount < totalPanelCount)
+            {
+                string appliesLine = "TalesUIFramework.UI.AppliesToSelected".Translate(matchingCount, totalPanelCount).ToString();
+                return $"{header}: {row.ToggleTooltip}\n{currentLine}\n{appliesLine}";
+            }
+
+            return $"{header}: {row.ToggleTooltip}\n{currentLine}";
+        }
+
+        private static string BuildGroupSelectionTooltip(
+            TalesControlRow row,
+            bool anyEnabled,
+            bool hasMixedOptions,
+            TalesControlOption currentOption,
+            int matchingCount,
+            int totalPanelCount)
+        {
+            if (totalPanelCount <= 1 && matchingCount <= 1)
+            {
+                return row.BuildSelectionTooltip(anyEnabled, currentOption);
+            }
+
+            string currentLabel = hasMixedOptions
+                ? "TalesUIFramework.UI.MixedValue".Translate().ToString()
+                : (currentOption?.Label ?? "-");
+            string currentLine = "TalesUIFramework.UI.CurrentValue".Translate(currentLabel).ToString();
+            string hintLine = !anyEnabled
+                ? (!string.IsNullOrEmpty(row.SelectionDisabledTooltip)
+                    ? row.SelectionDisabledTooltip
+                    : "TalesUIFramework.UI.DisabledHint".Translate().ToString())
+                : "TalesUIFramework.UI.ClickHint".Translate().ToString();
+
+            if (matchingCount < totalPanelCount)
+            {
+                string appliesLine = "TalesUIFramework.UI.AppliesToSelected".Translate(matchingCount, totalPanelCount).ToString();
+                return $"{row.Title}\n{row.SelectionTooltip}\n{currentLine}\n{appliesLine}\n{hintLine}";
+            }
+
+            return $"{row.Title}\n{row.SelectionTooltip}\n{currentLine}\n{hintLine}";
         }
 
         private static void DrawShortBadge(Rect cellRect, string badgeText, bool isEnabled)
@@ -274,13 +531,13 @@ namespace TalesUIFramework
 
         private void HandleInteraction(Event ev, List<Gizmo> group)
         {
-            if (string.IsNullOrEmpty(_pendingRowId) || _pendingColumn == InteractionColumn.None)
+            if (string.IsNullOrEmpty(_pendingColumnId) || _pendingRow == InteractionRow.None)
             {
                 return;
             }
 
-            TalesControlRow sourceRow = FindRow(_pendingRowId);
-            if (sourceRow == null)
+            List<Gizmo_TalesControlPanel> targetPanels = CollectTargetPanels(group);
+            if (targetPanels.Count == 0)
             {
                 ClearPendingInteraction();
                 return;
@@ -288,63 +545,153 @@ namespace TalesUIFramework
 
             int button = ev != null && ev.button >= 0 ? ev.button : _pendingMouseButton;
 
-            if (_pendingColumn == InteractionColumn.Toggle)
+            if (_pendingRow == InteractionRow.Toggle)
             {
-                bool targetState = !sourceRow.IsEnabled();
-                ApplyToGroup(group, sourceRow.Id, row => row.SetEnabled(targetState));
-                SoundDef sound = targetState ? SoundDefOf.Checkbox_TurnedOn : SoundDefOf.Checkbox_TurnedOff;
-                sound.PlayOneShotOnCamera();
-            }
-            else if (_pendingColumn == InteractionColumn.Selection && sourceRow.IsEnabled())
-            {
-                if (button == 0)
+                int matchingCount = 0;
+                int enabledCount = 0;
+                for (int i = 0; i < targetPanels.Count; i++)
                 {
-                    TalesControlOption nextOption = sourceRow.GetNextOption();
-                    if (nextOption != null)
+                    TalesControlRow ownRow = targetPanels[i].FindOwnRow(_pendingColumnId);
+                    if (ownRow != null)
                     {
-                        ApplyToGroup(group, sourceRow.Id, row =>
+                        matchingCount++;
+                        if (ownRow.IsEnabled())
                         {
-                            if (row.IsEnabled())
-                            {
-                                row.SelectOption(nextOption.Id);
-                            }
-                        });
-                        SoundDefOf.Click.PlayOneShotOnCamera();
+                            enabledCount++;
+                        }
                     }
                 }
-                else if (button == 1)
+
+                if (matchingCount > 0)
                 {
-                    OpenSelectionMenu(sourceRow, group);
+                    bool allEnabled = enabledCount == matchingCount;
+                    bool targetState = !allEnabled;
+                    ApplyToPanels(targetPanels, _pendingColumnId, row => row.SetEnabled(targetState));
+                    SoundDef sound = targetState ? SoundDefOf.Checkbox_TurnedOn : SoundDefOf.Checkbox_TurnedOff;
+                    sound.PlayOneShotOnCamera();
+                }
+            }
+            else if (_pendingRow == InteractionRow.Selection)
+            {
+                TalesControlRow representativeRow = null;
+                bool hasMixedOptions = false;
+                string firstOptionId = null;
+
+                for (int i = 0; i < targetPanels.Count; i++)
+                {
+                    TalesControlRow ownRow = targetPanels[i].FindOwnRow(_pendingColumnId);
+                    if (ownRow == null || !ownRow.IsEnabled())
+                    {
+                        continue;
+                    }
+
+                    representativeRow ??= ownRow;
+                    string optId = ownRow.GetSelectedOptionId() ?? string.Empty;
+                    if (firstOptionId == null)
+                    {
+                        firstOptionId = optId;
+                    }
+                    else if (firstOptionId != optId)
+                    {
+                        hasMixedOptions = true;
+                    }
+                }
+
+                if (representativeRow != null)
+                {
+                    if (button == 0)
+                    {
+                        TalesControlOption nextOption = representativeRow.GetNextOption();
+                        if (nextOption != null)
+                        {
+                            ApplyToPanels(targetPanels, _pendingColumnId, row =>
+                            {
+                                if (row.IsEnabled())
+                                {
+                                    row.SelectOption(nextOption.Id);
+                                }
+                            });
+                            SoundDefOf.Click.PlayOneShotOnCamera();
+                        }
+                    }
+                    else if (button == 1)
+                    {
+                        OpenSelectionMenu(representativeRow, hasMixedOptions, targetPanels);
+                    }
                 }
             }
 
             ClearPendingInteraction();
         }
 
-        private static void OpenSelectionMenu(TalesControlRow sourceRow, List<Gizmo> group)
+        private List<Gizmo_TalesControlPanel> CollectTargetPanels(List<Gizmo> group)
+        {
+            List<Gizmo_TalesControlPanel> result = new(_mergedPanels.Count);
+
+            void AddUnique(Gizmo_TalesControlPanel panel)
+            {
+                if (panel == null)
+                {
+                    return;
+                }
+
+                for (int i = 0; i < result.Count; i++)
+                {
+                    if (ReferenceEquals(result[i], panel)
+                        || (result[i]._pawn != null && panel._pawn != null && result[i]._pawn == panel._pawn))
+                    {
+                        return;
+                    }
+                }
+                result.Add(panel);
+            }
+
+            if (group != null)
+            {
+                for (int i = 0; i < group.Count; i++)
+                {
+                    if (group[i] is Gizmo_TalesControlPanel panel)
+                    {
+                        AddUnique(panel);
+                    }
+                }
+            }
+
+            for (int i = 0; i < _mergedPanels.Count; i++)
+            {
+                AddUnique(_mergedPanels[i]);
+            }
+
+            return result;
+        }
+
+        private static void OpenSelectionMenu(
+            TalesControlRow sourceRow,
+            bool hasMixedOptions,
+            List<Gizmo_TalesControlPanel> targetPanels)
         {
             if (sourceRow.Options == null || sourceRow.Options.Count == 0)
             {
                 return;
             }
 
-            string currentId = sourceRow.GetSelectedOptionId();
+            string currentId = hasMixedOptions ? null : sourceRow.GetSelectedOptionId();
             string rowId = sourceRow.Id;
-            List<Gizmo> groupSnapshot = group != null ? new List<Gizmo>(group) : new List<Gizmo>();
+            List<Gizmo_TalesControlPanel> panelsSnapshot = new(targetPanels);
 
             List<FloatMenuOption> menuOptions = new(sourceRow.Options.Count);
             for (int i = 0; i < sourceRow.Options.Count; i++)
             {
                 TalesControlOption option = sourceRow.Options[i];
-                bool isSelected = option.Id == currentId;
+                bool isSelected = currentId != null && option.Id == currentId;
                 string label = isSelected
                     ? "TalesUIFramework.UI.CurrentOptionMarker".Translate(option.Label).ToString()
                     : option.Label;
 
                 string optionId = option.Id;
                 FloatMenuOption menuOption = option.Icon != null
-                    ? new FloatMenuOption(label, () => ApplyOptionToGroup(groupSnapshot, rowId, optionId), option.Icon, Color.white)
-                    : new FloatMenuOption(label, () => ApplyOptionToGroup(groupSnapshot, rowId, optionId));
+                    ? new FloatMenuOption(label, () => ApplyOptionToPanels(panelsSnapshot, rowId, optionId), option.Icon, Color.white)
+                    : new FloatMenuOption(label, () => ApplyOptionToPanels(panelsSnapshot, rowId, optionId));
 
                 menuOptions.Add(menuOption);
             }
@@ -353,9 +700,9 @@ namespace TalesUIFramework
             Find.WindowStack.Add(new FloatMenu(menuOptions));
         }
 
-        private static void ApplyOptionToGroup(List<Gizmo> group, string rowId, string optionId)
+        private static void ApplyOptionToPanels(List<Gizmo_TalesControlPanel> panels, string rowId, string optionId)
         {
-            ApplyToGroup(group, rowId, row =>
+            ApplyToPanels(panels, rowId, row =>
             {
                 if (row.IsEnabled())
                 {
@@ -364,42 +711,37 @@ namespace TalesUIFramework
             });
         }
 
-        private static void ApplyToGroup(List<Gizmo> group, string rowId, Action<TalesControlRow> action)
+        private static void ApplyToPanels(
+            List<Gizmo_TalesControlPanel> panels,
+            string rowId,
+            Action<TalesControlRow> action)
         {
-            if (group == null)
+            if (panels == null)
             {
                 return;
             }
 
-            for (int i = 0; i < group.Count; i++)
+            for (int i = 0; i < panels.Count; i++)
             {
-                if (group[i] is Gizmo_TalesControlPanel panel)
+                TalesControlRow row = panels[i].FindOwnRow(rowId);
+                if (row != null)
                 {
-                    TalesControlRow row = panel.FindRow(rowId);
-                    if (row != null)
-                    {
-                        action(row);
-                    }
+                    action(row);
                 }
             }
         }
 
-        private TalesControlRow FindRow(string rowId)
+        private TalesControlRow FindOwnRow(string rowId)
         {
-            for (int i = 0; i < _rows.Count; i++)
-            {
-                if (_rows[i].Id == rowId)
-                {
-                    return _rows[i];
-                }
-            }
-            return null;
+            return !string.IsNullOrEmpty(rowId) && _ownRowsById.TryGetValue(rowId, out TalesControlRow row)
+                ? row
+                : null;
         }
 
         private void ClearPendingInteraction()
         {
-            _pendingRowId = null;
-            _pendingColumn = InteractionColumn.None;
+            _pendingColumnId = null;
+            _pendingRow = InteractionRow.None;
             _pendingMouseButton = -1;
             _pendingEvent = null;
         }
